@@ -1,8 +1,42 @@
+"""
+PyTorch 模型文档
+
+该模块提供了用于图像分类任务的 PyTorch 模型。
+
+可用模型：
+- mini_xception: XCEPTION 模型的较小版本。
+
+"""
+
 from torch import nn
 import torch.nn.functional as F
 
 class mini_xception(nn.Module):
+    """
+       mini_xception 类是一个 PyTorch 模型类，用于实现 XCEPTION 模型的较小版本。
+
+       参数：
+           无
+
+       属性：
+           num_channels (int): 输入图像的通道数，默认为 1。
+           image_size (int): 输入图像的尺寸，默认为 48。
+           num_labels (int): 分类任务的类别数，默认为 7。
+
+       方法：
+           __init__: 类的初始化方法，定义模型的结构。
+           forward: 前向传播方法，用于定义模型的前向计算过程。
+    """
     def __init__(self):
+        """
+            初始化 mini_xception 类。
+
+            参数：
+                无
+
+            返回：
+                无
+        """
         super(mini_xception,self).__init__()
         self.num_channels=1
         self.image_size=48

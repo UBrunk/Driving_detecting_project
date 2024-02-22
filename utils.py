@@ -3,6 +3,14 @@ from itertools import product as product
 from math import sqrt as sqrt
 import torch
 def default_prior_box():
+    """
+       生成默认的先验框（default prior box）。
+
+       Returns:
+           list: 包含默认先验框的列表，每个元素表示一个特征图的默认先验框。
+                 默认先验框的形状为 [feature_map_height, feature_map_width, num_prior_boxes, 4]，
+                 其中 4 表示每个先验框的坐标信息 (cx, cy, w, h)。
+    """
     mean_layer = []
     for k,f in enumerate(Config.feature_map):
         mean = []
@@ -28,6 +36,17 @@ def default_prior_box():
 
     return mean_layer
 def encode(match_boxes,prior_box,variances):
+    """
+       将实际目标位置编码成模型预测位置。
+
+       Args:
+           match_boxes (tensor): 实际目标位置，形状为 [num_objects, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+           prior_box (tensor): 默认先验框，形状为 [num_priors, 4]，每行表示一个先验框的坐标信息 (cx, cy, w, h)。
+           variances (tuple): 元组 (variance_cxcy, variance_wh)，其中 variance_cxcy 和 variance_wh 是位置编码的方差参数。
+
+       Returns:
+           tensor: 编码后的位置信息，形状为 [num_priors, 4]，每行表示一个边界框的编码后的位置信息。
+    """
     g_cxcy = (match_boxes[:, :2] + match_boxes[:, 2:])/2 - prior_box[:, :2]
     # encode variance
     g_cxcy /= (variances[0] * prior_box[:, 2:])
@@ -38,6 +57,15 @@ def encode(match_boxes,prior_box,variances):
     return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
 
 def change_prior_box(box):
+    """
+        将默认的先验框格式从中心点坐标形式转换为左上角和右下角坐标形式。
+
+        Args:
+            box (tensor): 默认先验框，形状为 [num_priors, 4]，每行表示一个先验框的坐标信息 (cx, cy, w, h)。
+
+        Returns:
+            tensor: 转换后的默认先验框，形状为 [num_priors, 4]，每行表示一个先验框的坐标信息 (xmin, ymin, xmax, ymax)。
+    """
     if Config.use_cuda:
         return torch.cat((box[:, :2] - box[:, 2:]/2,     # xmin, ymin
                          box[:, :2] + box[:, 2:]/2), 1).cuda()  # xmax, ymax
@@ -46,6 +74,16 @@ def change_prior_box(box):
                          box[:, :2] + box[:, 2:]/2), 1)
 # 计算两个box的交集
 def insersect(box1,box2):
+    """
+        计算两个边界框的交集面积。
+
+        Args:
+            box1 (tensor): 第一个边界框，形状为 [num_box1, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+            box2 (tensor): 第二个边界框，形状为 [num_box2, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+
+        Returns:
+            tensor: 交集面积，形状为 [num_box1, num_box2]，表示每对边界框的交集面积。
+    """
     label_num = box1.size(0)
     box_num = box2.size(0)
     max_xy = torch.min(
@@ -60,9 +98,19 @@ def insersect(box1,box2):
     return inter[:,:,0]*inter[:,:,1]
 
 def jaccard(box_a, box_b):
-    """计算jaccard比
-    公式:
-        A ∩ B / A ∪ B = A ∩ B / (area(A) + area(B) - A ∩ B)
+    """
+       计算两组边界框之间的 Jaccard 相似度（IoU）。
+
+       Args:
+           box_a (tensor): 第一组边界框，形状为 [num_box_a, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+           box_b (tensor): 第二组边界框，形状为 [num_box_b, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+
+       Returns:
+           tensor: Jaccard 相似度矩阵，形状为 [num_box_a, num_box_b]，表示每对边界框的 Jaccard 相似度。
+
+        计算jaccard比
+        公式:
+            A ∩ B / A ∪ B = A ∩ B / (area(A) + area(B) - A ∩ B)
     """
     inter = insersect(box_a, box_b)
     area_a = ((box_a[:, 2]-box_a[:, 0]) *
@@ -72,11 +120,21 @@ def jaccard(box_a, box_b):
     union = area_a + area_b - inter
     return inter / union  # [A,B]
 def point_form(boxes):
+    """
+       将边界框表示从中心点坐标形式转换为左上角和右下角坐标形式。
 
+       Args:
+           boxes (tensor): 边界框，形状为 [num_boxes, 4]，每行表示一个边界框的坐标信息 (cx, cy, w, h)。
+
+       Returns:
+           tensor: 转换后的边界框，形状为 [num_boxes, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+    """
     return torch.cat((boxes[:, :2] - boxes[:, 2:]/2,     # xmin, ymin
                      boxes[:, :2] + boxes[:, 2:]/2), 1)  # xmax, ymax
+
 def match(threshold, truths, priors, labels, loc_t, conf_t, idx):
-    """计算default box和实际位置的jaccard比，计算出每个box的最大jaccard比的种类和每个种类的最大jaccard比的box
+    """
+        计算default box和实际位置的jaccard比，计算出每个box的最大jaccard比的种类和每个种类的最大jaccard比的box
     Args:
         threshold: (float) jaccard比的阈值.
         truths: (tensor) 实际位置.
@@ -118,29 +176,31 @@ def match(threshold, truths, priors, labels, loc_t, conf_t, idx):
 
 
 def log_sum_exp(x):
-    """Utility function for computing log_sum_exp while determining
-    This will be used to determine unaveraged confidence loss across
-    all examples in a batch.
-    Args:
-        x (Variable(tensor)): conf_preds from conf layers
+    """
+        计算 log-sum-exp 函数的值，用于平滑地计算置信度损失。
+
+        Args:
+            x (tensor): 输入张量，形状为 [batch_size, num_classes]。
+
+        Returns:
+            tensor: log-sum-exp 函数的值，形状为 [batch_size, 1]。
     """
     x_max = x.data.max()
     result = torch.log(torch.sum(torch.exp(x-x_max), 1, keepdim=True)) + x_max
     return torch.log(torch.sum(torch.exp(x-x_max), 1, keepdim=True)) + x_max
 
 def decode(loc, priors, variances):
-    """Decode locations from predictions using priors to undo
-    the encoding we did for offset regression at train time.
-    Args:
-        loc (tensor): location predictions for loc layers,
-            Shape: [num_priors,4]
-        priors (tensor): Prior boxes in center-offset form.
-            Shape: [num_priors,4].
-        variances: (list[float]) Variances of priorboxes
-    Return:
-        decoded bounding box predictions
     """
+        将模型预测的位置信息解码为实际边界框。
 
+        Args:
+            loc (tensor): 模型预测的位置信息，形状为 [num_priors, 4]，每行表示一个边界框的位置编码信息。
+            priors (tensor): 默认先验框，形状为 [num_priors, 4]，每行表示一个先验框的坐标信息 (cx, cy, w, h)。
+            variances (list): 先验框位置编码的方差参数，包含两个元素：[variance_cxcy, variance_wh]。
+
+        Returns:
+        tensor: 解码后的边界框，形状为 [num_priors, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+    """
     boxes = torch.cat((
         priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
@@ -148,17 +208,18 @@ def decode(loc, priors, variances):
     boxes[:, 2:] += boxes[:, :2]
     return boxes
 def nms(boxes, scores, overlap=0.5, top_k=200):
-    """Apply non-maximum suppression at test time to avoid detecting too many
-    overlapping bounding boxes for a given object.
-    Args:
-        boxes: (tensor) The location preds for the img, Shape: [num_priors,4].
-        scores: (tensor) The class predscores for the img, Shape:[num_priors].
-        overlap: (float) The overlap thresh for suppressing unnecessary boxes.
-        top_k: (int) The Maximum number of box preds to consider.
-    Return:
-        The indices of the kept boxes with respect to num_priors.
     """
+       在测试时应用非最大值抑制（NMS）以消除重叠的边界框。
 
+       Args:
+           boxes (tensor): 边界框位置信息，形状为 [num_priors, 4]，每行表示一个边界框的坐标信息 (xmin, ymin, xmax, ymax)。
+           scores (tensor): 边界框置信度分数，形状为 [num_priors]。
+           overlap (float): 非最大值抑制的重叠阈值。
+           top_k (int): 要保留的最大边界框数量。
+
+       Returns:
+           tuple: 包含两个元素，第一个元素是保留的边界框的索引，第二个元素是保留的边界框的数量。
+    """
     keep = scores.new(scores.size(0)).zero_().long()
     if boxes.numel() == 0:
         return keep,0

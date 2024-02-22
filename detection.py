@@ -4,12 +4,32 @@ from utils import decode, nms
 
 
 class Detect(Function):
-    """At test time, Detect is the final layer of SSD.  Decode location preds,
-    apply non-maximum suppression to location predictions based on conf
-    scores and threshold to a top_k number of output predictions for both
-    confidence score and locations.
+    """
+        在测试阶段，Detect是SSD模型的最终层。
+        对位置预测进行解码，根据置信度分数和阈值对位置预测进行非最大抑制，
+        并选取前top_k个置信度分数和位置的输出预测。
+
+        参数:
+            num_classes (int): 类别数目，不包括背景类别
+            bkg_label (int): 背景类别的标签索引
+            top_k (int): 每个图像中保留的最高预测数量
+            conf_thresh (float): 置信度阈值，低于此阈值的预测将被忽略
+            nms_thresh (float): 非最大抑制的阈值，用于过滤重叠的边界框
+
+        注意:
+            如果nms_thresh小于或等于0，将引发ValueError异常。
     """
     def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
+        """
+            初始化Detect函数
+
+            参数:
+                num_classes (int): 类别数目，不包括背景类别
+                bkg_label (int): 背景类别的标签索引
+                top_k (int): 每个图像中保留的最高预测数量
+                conf_thresh (float): 置信度阈值，低于此阈值的预测将被忽略
+                nms_thresh (float): 非最大抑制的阈值，用于过滤重叠的边界框
+        """
         self.num_classes = num_classes
         self.background_label = bkg_label
         self.top_k = top_k
@@ -22,13 +42,18 @@ class Detect(Function):
 
     def forward(self, loc_data, conf_data, prior_data):
         """
-        Args:
-            loc_data: (tensor) Loc preds from loc layers
-                Shape: [batch,num_priors*4]
-            conf_data: (tensor) Shape: Conf preds from conf layers
-                Shape: [batch*num_priors,num_classes]
-            prior_data: (tensor) Prior boxes and variances from priorbox layers
-                Shape: [1,num_priors,4]
+            Detect前向传播函数
+
+            参数:
+                loc_data (tensor): 来自位置预测层的位置预测
+                    形状: [batch,num_priors*4]
+                conf_data (tensor): 来自置信度预测层的置信度预测
+                    形状: [batch*num_priors,num_classes]
+                prior_data (tensor): 来自先验框层的先验框和方差
+                    形状: [1,num_priors,4]
+
+            返回:
+                output (tensor): 输出预测
         """
         num = loc_data.size(0)  # batch size
         num_priors = prior_data.size(0)

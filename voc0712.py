@@ -1,9 +1,10 @@
-"""VOC Dataset Classes
+"""
+VOC 数据集类
 
-Original author: Francisco Massa
+原作者：Francisco Massa
 https://github.com/fmassa/vision/blob/voc_dataset/torchvision/datasets/voc.py
 
-Updated by: Ellis Brown, Max deGroot
+更新作者：Ellis Brown, Max deGroot
 """
 import os.path as osp
 import sys
@@ -24,16 +25,17 @@ VOC_CLASSES = [  # always index 0
 
 
 class VOCAnnotationTransform(object):
-    """Transforms a VOC annotation into a Tensor of bbox coords and label index
-    Initilized with a dictionary lookup of classnames to indexes
+    """
+        将 VOC 标注转换为边界框坐标和标签索引的张量
+       使用类名到索引的字典进行初始化
 
-    Arguments:
-        class_to_ind (dict, optional): dictionary lookup of classnames -> indexes
-            (default: alphabetic indexing of VOC's 20 classes)
-        keep_difficult (bool, optional): keep difficult instances or not
-            (default: False)
-        height (int): height
-        width (int): width
+       参数:
+           class_to_ind (dict, optional): 类名到索引的字典
+               (默认: VOC 20 个类的字母索引)
+           keep_difficult (bool, optional): 是否保留困难样本
+               (默认: False)
+           height (int): 图像高度
+           width (int): 图像宽度
     """
 
     def __init__(self, class_to_ind=None, keep_difficult=False):
@@ -43,11 +45,10 @@ class VOCAnnotationTransform(object):
 
     def __call__(self, target, width, height):
         """
-        Arguments:
-            target (annotation) : the target annotation to be made usable
-                will be an ET.Element
-        Returns:
-            a list containing lists of bounding boxes  [bbox coords, class name]
+            参数:
+                target (annotation) : 待处理的目标标注，类型为 ET.Element
+            返回:
+                包含边界框坐标和类别索引的列表  [bbox coords, class name]
         """
         res = []
         for obj in target.iter('object'):
@@ -73,20 +74,17 @@ class VOCAnnotationTransform(object):
 
 
 class VOCDetection(data.Dataset):
-    """VOC Detection Dataset Object
+    """
+        VOC 检测数据集类
 
-    input is image, target is annotation
+        输入为图像，目标为标注
 
-    Arguments:
-        root (string): filepath to VOCdevkit folder.
-        image_set (string): imageset to use (eg. 'train', 'val', 'test')
-        transform (callable, optional): transformation to perform on the
-            input image
-        target_transform (callable, optional): transformation to perform on the
-            target `annotation`
-            (eg: take in caption string, return tensor of word indices)
-        dataset_name (string, optional): which dataset to load
-            (default: 'VOC2007')
+        参数:
+            root (string): VOCdevkit 文件夹的路径.
+            image_set (string): 使用的图像集 (例如 'train', 'val', 'test')
+            transform (callable, optional): 对输入图像的转换
+            target_transform (callable, optional): 对目标标注的转换
+            dataset_name (string, optional): 加载的数据集名称
     """
 
     def __init__(self, root,
@@ -137,45 +135,46 @@ class VOCDetection(data.Dataset):
         # return torch.from_numpy(img), target, height, width
 
     def pull_image(self, index):
-        '''Returns the original image object at index in PIL form
+        """
+        以 PIL 形式返回索引处的原始图像对象
 
-        Note: not using self.__getitem__(), as any transformations passed in
-        could mess up this functionality.
+            注意: 不使用 self.__getitem__()，因为传入的任何转换都可能破坏此功能。
 
-        Argument:
-            index (int): index of img to show
-        Return:
-            PIL img
-        '''
+            参数:
+                index (int): 要显示的图像的索引
+            返回:
+                PIL 形式的图像
+        """
+
         img_id = self.ids[index]
         return cv2.imread(self._imgpath % img_id, cv2.IMREAD_COLOR)
 
     def pull_anno(self, index):
-        '''Returns the original annotation of image at index
+        """
+            返回索引处图像的原始标注
 
-        Note: not using self.__getitem__(), as any transformations passed in
-        could mess up this functionality.
+            注意: 不使用 self.__getitem__()，因为传入的任何转换都可能破坏此功能。
 
-        Argument:
-            index (int): index of img to get annotation of
-        Return:
-            list:  [img_id, [(label, bbox coords),...]]
-                eg: ('001718', [('dog', (96, 13, 438, 332))])
-        '''
+            参数:
+                index (int): 要获取标注的图像的索引
+            返回:
+                列表:  [img_id, [(label, bbox coords),...]]
+                    例如: ('001718', [('dog', (96, 13, 438, 332))])
+        """
         img_id = self.ids[index]
         anno = ET.parse(self._annopath % img_id).getroot()
         gt = self.target_transform(anno, 1, 1)
         return img_id[1], gt
 
     def pull_tensor(self, index):
-        '''Returns the original image at an index in tensor form
+        """
+            以张量形式返回索引处的原始图像
 
-        Note: not using self.__getitem__(), as any transformations passed in
-        could mess up this functionality.
+            注意: 不使用 self.__getitem__()，因为传入的任何转换都可能破坏此功能。
 
-        Argument:
-            index (int): index of img to show
-        Return:
-            tensorized version of img, squeezed
-        '''
+            参数:
+                index (int): 要显示的图像的索引
+            返回:
+                张量化的图像版本，已压缩
+        """
         return torch.Tensor(self.pull_image(index)).unsqueeze_(0)

@@ -1,33 +1,65 @@
+"""
+人脸检测和姿态估计实现。
+
+导入必要的库和模块：
+    - TensorFlow
+    - Keras
+    - OpenCV
+
+定义的辅助函数和类包括：
+    - 非最大抑制算法（NMS）
+    - 边界框转换函数
+    - 特征提取网络模型（PNet、RNet、ONet）
+
+提供的函数包括：
+    - detect_faces：用于在给定图像中检测人脸并返回边界框和面部特征点的位置
+    - get_head_pose：用于估计人脸的姿态，包括俯仰、偏航和翻滚角度
+
+提供的辅助函数用于处理旋转向量和旋转矩阵，并将其转换为欧拉角。
+
+该代码实现了一个端到端的人脸检测和姿态估计系统，可用于识别图像中的人脸并估计其在三维空间中的姿态。
+"""
 from __future__ import print_function
 
+import os
 import time
 
-import os
-import tensorflow as  tf
+import tensorflow as tf
 from keras.applications.imagenet_utils import preprocess_input
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
 
 from Facemask.mobileNet import MobileNet
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-from PIL import Image
-from keras.engine.saving import load_model
-from keras_preprocessing.image import img_to_array
+# gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+# sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+config = ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
+sess = InteractiveSession(config=config)
+
+# from tensorflow.keras.engine.saving import load_model
+from tensorflow.keras.models import load_model
+from keras.preprocessing.image import img_to_array
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
-import cv2
 import math
-import argparse
 
 import numpy as np
-import h5py
-
 
 
 def nms(boxes, overlap_threshold=0.5, mode='union'):
+    """
+       非最大抑制算法，用于去除重叠的边界框，保留最可能的边界框。
+
+       :param boxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2, score]
+       :param overlap_threshold: 重叠阈值，若两个边界框的重叠面积超过此阈值，则进行抑制
+       :param mode: 抑制模式，'min'表示采用交并比，'union'表示采用最小面积
+       :return: 保留的边界框索引列表
+    """
     if len(boxes) == 0:
         return []
 
@@ -61,6 +93,12 @@ def nms(boxes, overlap_threshold=0.5, mode='union'):
 
 
 def convert_to_square(bboxes):
+    """
+       将边界框调整为正方形。
+
+       :param bboxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2]
+       :return: 调整后的正方形边界框列表
+    """
     square_bboxes = np.zeros_like(bboxes)
     x1, y1, x2, y2 = [bboxes[:, i] for i in range(4)]
     h = y2 - y1 + 1.0
@@ -74,6 +112,13 @@ def convert_to_square(bboxes):
 
 
 def calibrate_box(bboxes, offsets):
+    """
+       校准边界框。
+
+       :param bboxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2]
+       :param offsets: 偏移量列表，每个偏移量表示为[x1, y1, x2, y2]
+       :return: 校准后的边界框列表
+       """
     x1, y1, x2, y2 = [bboxes[:, i] for i in range(4)]
     w = x2 - x1 + 1.0
     h = y2 - y1 + 1.0
@@ -86,6 +131,14 @@ def calibrate_box(bboxes, offsets):
 
 
 def get_image_boxes(bounding_boxes, img, size=24):
+    """
+        获取图像中的候选区域。
+
+        :param bounding_boxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2]
+        :param img: 输入图像
+        :param size: 图像尺寸
+        :return: 候选区域列表
+    """
     num_boxes = len(bounding_boxes)
     width = img.shape[1]
     height = img.shape[0]
@@ -108,6 +161,14 @@ def get_image_boxes(bounding_boxes, img, size=24):
 
 
 def correct_bboxes(bboxes, width, height):
+    """
+       修正边界框，确保在图像范围内。
+
+       :param bboxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2]
+       :param width: 图像宽度
+       :param height: 图像高度
+       :return: 修正后的边界框列表
+    """
     x1, y1, x2, y2 = [bboxes[:, i] for i in range(4)]
     w, h = x2 - x1 + 1.0, y2 - y1 + 1.0
     num_boxes = bboxes.shape[0]
@@ -140,6 +201,12 @@ def correct_bboxes(bboxes, width, height):
 
 
 def _preprocess(img):
+    """
+        图像预处理函数，用于将输入图像进行预处理。
+
+        :param img: 输入图像，一个三维数组，表示为(height, width, channels)，channels通常为RGB通道
+        :return: 预处理后的图像，一个四维数组，表示为(1, channels, height, width)，用于神经网络输入
+    """
     img = img.transpose((2, 0, 1))
     img = np.expand_dims(img, 0)
     img = (img - 127.5) * 0.0078125
@@ -147,6 +214,14 @@ def _preprocess(img):
 
 
 def show_bboxes(img, bounding_boxes, facial_landmarks=[]):
+    """
+        绘制边界框和面部特征点函数。
+
+        :param img: 输入图像，一个三维数组，表示为(height, width, channels)，channels通常为RGB通道
+        :param bounding_boxes: 边界框列表，每个边界框表示为[x1, y1, x2, y2]
+        :param facial_landmarks: 面部特征点列表，每个特征点为一组(x, y)坐标
+        :return: 绘制了边界框和面部特征点的图像，一个与输入图像相同大小的三维数组
+    """
     draw = img.copy()
     for b in bounding_boxes:
         b = [int(round(value)) for value in b]
@@ -161,6 +236,12 @@ def show_bboxes(img, bounding_boxes, facial_landmarks=[]):
 
 
 class Flatten(nn.Module):
+    """
+        自定义的Flatten层，用于将输入展平为一维向量。
+
+        :param x: 输入张量，一个四维张量，表示为(batch_size, channels, height, width)
+        :return: 一维张量，将输入张量展平后的结果
+    """
     def __init__(self):
         super(Flatten, self).__init__()
 
@@ -170,6 +251,14 @@ class Flatten(nn.Module):
 
 
 class PNet(nn.Module):
+    """
+        PNet模型，用于人脸检测的第一阶段。
+
+        主要包括特征提取和边界框回归两部分。
+
+        :param x: 输入张量，一个四维张量，表示为(batch_size, channels, height, width)
+        :return: 边界框回归结果张量和特征提取结果张量
+    """
     def __init__(self):
         super(PNet, self).__init__()
         self.features = nn.Sequential(
@@ -193,6 +282,14 @@ class PNet(nn.Module):
 
 
 class RNet(nn.Module):
+    """
+        RNet模型，用于人脸检测的第二阶段。
+
+        主要包括特征提取和边界框回归两部分。
+
+        :param x: 输入张量，一个四维张量，表示为(batch_size, channels, height, width)
+        :return: 边界框回归结果张量和特征提取结果张量
+    """
     def __init__(self):
         super(RNet, self).__init__()
         self.features = nn.Sequential(
@@ -217,6 +314,14 @@ class RNet(nn.Module):
 
 
 class ONet(nn.Module):
+    """
+        ONet模型，用于人脸检测的第三阶段。
+
+        主要包括特征提取、边界框回归和面部特征点检测三部分。
+
+        :param x: 输入张量，一个四维张量，表示为(batch_size, channels, height, width)
+        :return: 面部特征点检测结果张量、边界框回归结果张量和特征提取结果张量
+    """
     def __init__(self):
         super(ONet, self).__init__()
         self.features = nn.Sequential(
@@ -255,6 +360,15 @@ class ONet(nn.Module):
 
 
 def run_first_stage(image, net, scale, threshold):
+    """
+        运行第一阶段人脸检测。
+
+        :param image: 输入图像
+        :param net: 神经网络模型
+        :param scale: 图像缩放比例
+        :param threshold: 阈值，用于筛选人脸检测结果的置信度
+        :return: 经过非最大抑制后的边界框列表，每个边界框表示为[x1, y1, x2, y2, score]
+    """
     with torch.no_grad():
         height, width = image.shape[:2]
         sw, sh = math.ceil(width * scale), math.ceil(height * scale)
@@ -273,6 +387,15 @@ def run_first_stage(image, net, scale, threshold):
 
 
 def _generate_bboxes(probs, offsets, scale, threshold):
+    """
+        生成候选边界框。
+
+        :param probs: 神经网络输出的人脸置信度概率图
+        :param offsets: 神经网络输出的边界框偏移量
+        :param scale: 图像缩放比例
+        :param threshold: 阈值，用于筛选人脸置信度概率图中的值
+        :return: 候选边界框列表，每个边界框表示为[x1, y1, x2, y2, score, tx1, ty1, tx2, ty2]
+    """
     stride = 2
     cell_size = 12
 
@@ -297,6 +420,15 @@ def detect_faces(image,
                  min_face_size=35.0,
                  thresholds=[0.6, 0.7, 0.8],
                  nms_thresholds=[0.7, 0.7, 0.7]):
+    """
+        检测图像中的人脸和面部特征点。
+
+        :param image: 输入图像
+        :param min_face_size: 最小人脸尺寸
+        :param thresholds: 阈值列表，分别用于阶段1、2和3的人脸置信度概率
+        :param nms_thresholds: 非最大抑制阈值列表，分别用于阶段1、2和3
+        :return: 人脸边界框列表和面部特征点列表
+    """
     pnet, rnet, onet = PNet(), RNet(), ONet()
     onet.eval()
 
@@ -331,7 +463,7 @@ def detect_faces(image,
     bounding_boxes = convert_to_square(bounding_boxes)
     bounding_boxes[:, 0:4] = np.round(bounding_boxes[:, 0:4])
     with torch.no_grad():
-    # STAGE 2
+        # STAGE 2
         img_boxes = get_image_boxes(bounding_boxes, image, size=24)
         img_boxes = Variable(torch.FloatTensor(img_boxes), volatile=True)
     output = rnet(img_boxes)
@@ -384,13 +516,18 @@ def detect_faces(image,
 
 
 def isRotationMatrix(rvec):
+    """
+        判断输入的旋转向量是否为旋转矩阵。
+
+        :param rvec: 旋转向量
+        :return: 布尔值，True表示是旋转矩阵，False表示不是旋转矩阵
+    """
     theta = np.linalg.norm(rvec)
     r = rvec / theta
     R_ = np.array([[0, -r[2][0], r[1][0]],
                    [r[2][0], 0, -r[0][0]],
                    [-r[1][0], r[0][0], 0]])
     R = np.cos(theta) * np.eye(3) + (1 - np.cos(theta)) * r * r.T + np.sin(theta) * R_
-
 
     Rt = np.transpose(R)  # 旋转矩阵R的转置
     shouldBeIdentity = np.dot(Rt, R)  # R的转置矩阵乘以R
@@ -400,6 +537,12 @@ def isRotationMatrix(rvec):
 
 
 def rotationMatrixToAngles(Re):
+    """
+    将旋转矩阵转换为欧拉角。
+
+    :param Re: 旋转矩阵
+    :return: 一个包含三个欧拉角（俯仰角、偏航角、翻滚角）的numpy数组
+    """
     assert (isRotationMatrix(Re))  # 判断是否是旋转矩阵（用到正交矩阵特性）
     theta = np.linalg.norm(Re)
     r = Re / theta
@@ -429,6 +572,12 @@ def rotationMatrixToAngles(Re):
 
 # 从旋转向量转换为欧拉角
 def get_euler_angle(rotation_vector):
+    """
+        计算旋转向量对应的欧拉角。
+
+        :param rotation_vector: 旋转向量
+        :return: 一个四元组，表示欧拉角 (0, pitch, yaw, roll)，其中pitch表示俯仰角，yaw表示偏航角，roll表示翻滚角
+    """
     # calculate rotation angles
     theta = cv2.norm(rotation_vector, cv2.NORM_L2)
 
@@ -469,6 +618,12 @@ def get_euler_angle(rotation_vector):
 
 
 def get_head_pose(landmarks):
+    """
+        获取头部姿态。
+
+        :param landmarks: 面部特征点坐标列表，每个特征点为一组(x, y)坐标
+        :return: 一个四元组，表示头部姿态 (0, pitch, yaw, roll)，其中pitch表示俯仰角，yaw表示偏航角，roll表示翻滚角
+    """
     points = []
     for p in landmarks:
         for i in range(10):  # 左眼右眼鼻子左嘴角右嘴角
@@ -557,6 +712,13 @@ def get_head_pose(landmarks):
 
 
 def get_face_expression(img, bounding_box):
+    """
+        获取人脸区域图像。
+
+        :param img: 输入图像
+        :param bounding_box: 人脸边界框列表，每个边界框表示为[x1, y1, x2, y2]
+        :return: 人脸区域图像
+    """
     draw = img.copy()
     if len(bounding_box) > 0:
         point = []
@@ -569,15 +731,24 @@ def get_face_expression(img, bounding_box):
         cropped = draw[point[1]:point[3], point[0]:point[2]]
         # cv2.imshow('0', cropped)
         return cropped
+
+
 emotion_model_path = 'emotion.hdf5'
 emotion_classifier = load_model(emotion_model_path, compile=False)
 EMOTIONS = ["生气", "厌恶", "害怕", "喜悦", "悲伤", "惊讶", "普通"]
-def get_emotion(img):
 
+
+def get_emotion(img):
+    """
+        获取图像中的情绪。
+
+        :param img: 输入图像
+        :return: 情绪概率、情绪标签和预测结果
+    """
     preds = []  # 预测的结果
     label = None
-    emotion_probability=None
-    if len(img)>0:
+    emotion_probability = None
+    if len(img) > 0:
         roi = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         roi = cv2.resize(roi, (64, 64))
         roi = roi.astype("float") / 255.0
@@ -587,32 +758,42 @@ def get_emotion(img):
         emotion_probability = np.max(preds)  # 最大的概率
         label = EMOTIONS[preds.argmax()]
     else:
-        label='wait'
-        emotion_probability=0
+        label = 'wait'
+        emotion_probability = 0
         # print(label)
 
-    return emotion_probability, label,preds
+    return emotion_probability, label, preds
+
 
 Crop_HEIGHT = 128
 Crop_WIDTH = 128
 NUM_CLASSES = 2
 mask_model = MobileNet(input_shape=[Crop_HEIGHT, Crop_WIDTH, 3], classes=NUM_CLASSES)
 mask_model.load_weights("facemask.h5")
-class_names=['mask','nomask']
+class_names = ['mask', 'nomask']
+
+
 def get_face_state(img):
+    """
+        获取人脸口罩状态。
+
+        :param img: 输入图像
+        :return: 人脸口罩状态
+    """
     if len(img) > 0:
-    # 归一化
-        img=cv2.resize(img,(128,128))
+        # 归一化
+        img = cv2.resize(img, (128, 128))
         img = preprocess_input(np.reshape(np.array(img, np.float64), [1, Crop_HEIGHT, Crop_WIDTH, 3]))
-        label=mask_model.predict(img)
+        label = mask_model.predict(img)
         # print('inputnum')
-        num=np.argmax(label)
+        num = np.argmax(label)
         # print(num)
         classes = class_names[int(num)]
         # print(int(num))
         return classes
     else:
         return "正在识别···"
+
 
 if __name__ == '__main__':
     import cv2

@@ -1,9 +1,42 @@
+"""
+    SSD模型定义类。
+
+    Args:
+        nn.Module: PyTorch中神经网络模块的基类
+
+    Attributes:
+        vgg: VGG模型的特征提取部分
+        conv8_1: 用于特征图预处理的卷积层
+        conv8_2: 用于特征图预处理的卷积层
+        conv9_1: 用于特征图预处理的卷积层
+        conv9_2: 用于特征图预处理的卷积层
+        conv10_1: 用于特征图预处理的卷积层
+        conv10_2: 用于特征图预处理的卷积层
+        conv11_1: 用于特征图预处理的卷积层
+        conv11_2: 用于特征图预处理的卷积层
+        feature_map_loc_1: 特征图位置输出层
+        feature_map_loc_2: 特征图位置输出层
+        feature_map_loc_3: 特征图位置输出层
+        feature_map_loc_4: 特征图位置输出层
+        feature_map_loc_5: 特征图位置输出层
+        feature_map_loc_6: 特征图位置输出层
+        feature_map_conf_1: 特征图类别输出层
+        feature_map_conf_2: 特征图类别输出层
+        feature_map_conf_3: 特征图类别输出层
+        feature_map_conf_4: 特征图类别输出层
+        feature_map_conf_5: 特征图类别输出层
+        feature_map_conf_6: 特征图类别输出层
+
+    Methods:
+        forward(image): 正向传播过程，用于模型推理
+"""
 import torch
 import torch.nn as nn
 import l2norm
 import Config as config
 class SSD(nn.Module):
     def __init__(self):
+        """初始化SSD模型的各个层和模块。"""
         super(SSD,self).__init__()
         self.vgg = []
         #vgg-16模型

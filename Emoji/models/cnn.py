@@ -1,3 +1,17 @@
+"""
+Keras 模型文档
+
+该模块提供了用于图像分类任务的各种 Keras 模型。
+
+可用模型：
+- simple_CNN: 简单的卷积神经网络模型。
+- simpler_CNN: 较简单版本的卷积神经网络模型。
+- tiny_XCEPTION: XCEPTION 模型的迷你版本。
+- mini_XCEPTION: XCEPTION 模型的较小版本。
+- big_XCEPTION: XCEPTION 模型的较大版本。
+
+"""
+
 from keras.layers import Activation, Convolution2D, Dropout, Conv2D
 from keras.layers import AveragePooling2D, BatchNormalization
 from keras.layers import GlobalAveragePooling2D
@@ -11,7 +25,17 @@ from keras import layers
 from keras.regularizers import l2
 
 def simple_CNN(input_shape, num_classes):
+    """
+       创建一个简单的卷积神经网络模型。
 
+       参数：
+           input_shape (tuple)：输入图像的形状，例如 (height, width, channels)。
+           num_classes (int)：输出类别的数量。
+
+       返回：
+           model (Sequential)：Keras Sequential 模型对象。
+
+    """
     model = Sequential()
     model.add(Convolution2D(filters=16, kernel_size=(7, 7), padding='same',
                             name='image_array', input_shape=input_shape))
@@ -54,7 +78,17 @@ def simple_CNN(input_shape, num_classes):
     return model
 
 def simpler_CNN(input_shape, num_classes):
+    """
+        创建一个更简化的卷积神经网络模型。
 
+        参数：
+            input_shape (tuple)：输入图像的形状，例如 (height, width, channels)。
+            num_classes (int)：输出类别的数量。
+
+        返回：
+            model (Sequential)：Keras Sequential 模型对象。
+
+    """
     model = Sequential()
     model.add(Convolution2D(filters=16, kernel_size=(5, 5), padding='same',
                             name='image_array', input_shape=input_shape))
@@ -105,6 +139,18 @@ def simpler_CNN(input_shape, num_classes):
     return model
 
 def tiny_XCEPTION(input_shape, num_classes, l2_regularization=0.01):
+    """
+       创建一个微小的XCEPTION模型。
+
+       参数：
+           input_shape (tuple)：输入图像的形状，例如 (height, width, channels)。
+           num_classes (int)：输出类别的数量。
+           l2_regularization (float)：L2正则化参数，默认为0.01。
+
+       返回：
+           model (Model)：Keras Model 模型对象。
+
+    """
     regularization = l2(l2_regularization)
 
     # base
@@ -201,6 +247,18 @@ def tiny_XCEPTION(input_shape, num_classes, l2_regularization=0.01):
 
 
 def mini_XCEPTION(input_shape, num_classes, l2_regularization=0.01):
+    """
+        创建一个迷你的XCEPTION模型。
+
+        参数：
+            input_shape (tuple)：输入图像的形状，例如 (height, width, channels)。
+            num_classes (int)：输出类别的数量。
+            l2_regularization (float)：L2正则化参数，默认为0.01。
+
+        返回：
+            model (Model)：Keras Model 模型对象。
+
+    """
     regularization = l2(l2_regularization)
 
     # base
@@ -296,6 +354,17 @@ def mini_XCEPTION(input_shape, num_classes, l2_regularization=0.01):
     return model
 
 def big_XCEPTION(input_shape, num_classes):
+    """
+       创建一个大型的XCEPTION模型。
+
+       参数：
+           input_shape (tuple)：输入图像的形状，例如 (height, width, channels)。
+           num_classes (int)：输出类别的数量。
+
+       返回：
+           model (Model)：Keras Model 模型对象。
+
+    """
     img_input = Input(input_shape)
     x = Conv2D(32, (3, 3), strides=(2, 2), use_bias=False)(img_input)
     x = BatchNormalization(name='block1_conv1_bn')(x)

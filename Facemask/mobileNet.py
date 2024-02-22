@@ -1,3 +1,10 @@
+"""
+MobileNet 模型文档
+
+该模块提供了 MobileNet 模型的实现，用于图像分类任务。
+
+"""
+
 import warnings
 import numpy as np
 
@@ -12,7 +19,18 @@ def MobileNet(input_shape=[224,224,3],
               depth_multiplier=1,
               dropout=1e-3,
               classes=1000):
+    """
+       创建 MobileNet 模型。
 
+       参数：
+           input_shape (list): 输入图像的尺寸，默认为 [224, 224, 3]。
+           depth_multiplier (float): 模型的宽度倍数，默认为 1。
+           dropout (float): Dropout 层的丢弃率，默认为 1e-3。
+           classes (int): 分类任务的类别数，默认为 1000。
+
+       返回：
+           Model: MobileNet 模型。
+    """
 
     img_input = Input(shape=input_shape)
 
@@ -69,6 +87,18 @@ def MobileNet(input_shape=[224,224,3],
     return model
 
 def _conv_block(inputs, filters, kernel=(3, 3), strides=(1, 1)):
+    """
+       创建 MobileNet 的卷积块。
+
+       参数：
+           inputs (Tensor): 输入张量。
+           filters (int): 卷积核数。
+           kernel (tuple): 卷积核大小，默认为 (3, 3)。
+           strides (tuple): 卷积步长，默认为 (1, 1)。
+
+       返回：
+           Tensor: 经过卷积块后的张量。
+    """
     x = Conv2D(filters, kernel,
                padding='same',
                use_bias=False,
@@ -80,7 +110,19 @@ def _conv_block(inputs, filters, kernel=(3, 3), strides=(1, 1)):
 
 def _depthwise_conv_block(inputs, pointwise_conv_filters,
                           depth_multiplier=1, strides=(1, 1), block_id=1):
+    """
+       创建 MobileNet 的深度可分离卷积块。
 
+       参数：
+           inputs (Tensor): 输入张量。
+           pointwise_conv_filters (int): 点卷积核数。
+           depth_multiplier (float): 深度倍数，默认为 1。
+           strides (tuple): 卷积步长，默认为 (1, 1)。
+           block_id (int): 块编号。
+
+       返回：
+           Tensor: 经过深度可分离卷积块后的张量。
+    """
     x = DepthwiseConv2D((3, 3),
                         padding='same',
                         depth_multiplier=depth_multiplier,
@@ -100,10 +142,28 @@ def _depthwise_conv_block(inputs, pointwise_conv_filters,
     return Activation(relu6, name='conv_pw_%d_relu' % block_id)(x)
 
 def relu6(x):
+    """
+       ReLU6 激活函数。
+
+       参数：
+           x (Tensor): 输入张量。
+
+       返回：
+           Tensor: 经过 ReLU6 激活后的张量。
+    """
     return K.relu(x, max_value=6)
 
 
 def preprocess_input(x):
+    """
+       图像预处理函数。
+
+       参数：
+           x (ndarray): 输入图像数组。
+
+       返回：
+           ndarray: 预处理后的图像数组。
+    """
     x /= 255.
     x -= 0.5
     x *= 2.
